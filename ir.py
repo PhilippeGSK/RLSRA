@@ -251,7 +251,7 @@ class Ir:
     def dump(self) -> None:
         block = self.blocks.first
         while block != None:
-            print(f"blk 0x{hex(block.il_idx)[2:].zfill(4)} - predecessors: [" + ", ".join(str(pred) for pred in block.predecessors) + "]")
+            print(f"\nblk 0x{hex(block.il_idx)[2:].zfill(4)} - predecessors: [" + ", ".join(str(pred) for pred in block.predecessors) + "]")
             if block.active_in_set == None:
                 print("var in: (unknown)")
             else:

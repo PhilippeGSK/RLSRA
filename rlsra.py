@@ -149,6 +149,7 @@ class Rlsra:
         assert subtree.kind == irepr.TreeKind.LdLocal
 
         val = self.var_vals[subtree.operands[0]]
+
         val_was_used = val.last_use != None
         val_was_active = val.active_in != None
         val.last_use = self.current_tree
@@ -196,11 +197,16 @@ class Rlsra:
             self.reset_var_vals_and_regs()
 
             # Activate the values in the active out set
-            for active_out in block.active_out_set:
-                assert isinstance(active_out.val.of, int)
-                
-                active_out.val.last_use = selected_out_edge.target
-                self.activate(active_out.val)
+            if selected_out_edge != None:
+                for var_val in self.var_vals:
+                    var_val.last_use = selected_out_edge.target
+
+                for active_out in block.active_out_set:
+                    assert isinstance(active_out.val.of, int)
+                    
+                    active_out.val.active_in = active_out.reg
+                    self.registers[active_out.reg].active_val = active_out.val
+                    self.active_vals.append(active_out.val)
             
             for tree in block.tree_reverse_execution_order():
                 self.current_tree = tree
@@ -225,6 +231,7 @@ class Rlsra:
 
                             self.registers[val.active_in].active_val = None
                             val.active_in = None
+                            val.last_use = None
                             self.active_vals.remove(val)
                         else:
                             # If it's not already active, we emit a spill
@@ -240,15 +247,17 @@ class Rlsra:
                             self.tree_vals.append(subtree_val)
 
                             val.active_in = None
+                            val.last_use = None
                             self.active_vals.remove(val)
                         else:
                             # If not, we first find a register to write it into (reusing the register of the subtree), then add a spill
                             subtree_val = Value(of=subtree, active_in=None, last_use=tree)
+                            val.last_use = None
                             self.activate(subtree_val)
                             self.tree_vals.append(subtree_val)
 
                             tree.operands.append(subtree_val.active_in)
-                            tree.post_spills.append(RegSpill(val=subtree_val, reg=subtree_val.active_in))
+                            tree.post_spills.append(RegSpill(val=val, reg=subtree_val.active_in))
                 else:
                     tree_val = self.get_current_tree_val()
                     if tree_val != None:
