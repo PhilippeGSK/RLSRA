@@ -15,7 +15,8 @@ class Value:
     of: int | Tree
     # Register, if value is active
     active_in: int | None
-    last_use: Tree | None
+    # If the variable was last used in another block we'll have last_use be that block
+    last_use: Tree | BasicBlock | None
 
     def __eq__(self, value: object) -> bool:
         return self is value
@@ -51,6 +52,15 @@ class RegMove:
 
     def __str__(self) -> str:
         return f"spill {self.val} from r{self.reg}"
+
+# Inserted into the active in / active out sets of blocks
+@dataclasses.dataclass
+class ActiveInOut:
+    val: Value
+    reg: int
+
+    def __str__(self) -> str:
+        return f"{self.val} in r{self.reg}"
 
 # The main class that performs RLSRA
 class Rlsra:
@@ -93,12 +103,15 @@ class Rlsra:
         # The heuristic used to find the best value to spill is to pick the one that was used last in the code
         best_val = None
         for active_val in self.active_vals:
-            if active_val.last_use.ir_idx <= val.last_use.ir_idx:
+            if active_val.last_use is val.last_use:
                 # The value will be used before or at the same time as the current value, we cannot spill it
                 continue
 
             if best_val == None:
                 best_val = active_val
+            elif isinstance(active_val.last_use, irepr.BasicBlock):
+                best_val = active_val
+                break
             elif active_val.last_use.ir_idx > best_val.last_use.ir_idx:
                 best_val = active_val
         
@@ -117,6 +130,39 @@ class Rlsra:
             if tree_val.of is self.current_tree:
                 return tree_val
     
+    def reset_var_vals_and_regs(self) -> None:
+        assert self.tree_vals == []
+
+        for val in self.var_vals:
+            if val.active_in != None:
+                self.registers[val.active_in].active_val = None
+                val.active_in = None
+                self.active_vals.remove(val)
+            
+            val.last_use = None
+        
+        assert self.active_vals == []
+        assert not any(reg.active_val != None for reg in self.registers)
+    
+    # Setup a local variable and use its register as the output of the LdLocal subtree
+    def use_local(self, subtree: Tree):
+        assert subtree.kind == irepr.TreeKind.LdLocal
+
+        val = self.var_vals[subtree.operands[0]]
+        val_was_used = val.last_use != None
+        val_was_active = val.active_in != None
+        val.last_use = self.current_tree
+
+        # Activate the variable if it wasn't already
+        if not val_was_active:
+            self.activate(val)
+
+        subtree.reg = val.active_in
+
+        # If the variable is expected to be found in memory, generate a spill
+        if val_was_used and not val_was_active:
+            subtree.post_spills.append(RegSpill(val=val, reg=val.active_in))
+    
     # Do RLSRA
     # Preconditions : recompute_predecessors, reindex all executed
     def do_reverse_linear_scan(self, ir: Ir) -> None:
@@ -130,6 +176,31 @@ class Rlsra:
         
         while len(self.blocks_to_process) != 0:
             block = self.blocks_to_process.popleft()
+
+            # Since we're processing blocks in reverse order we select active out sets
+            # TODO : Add a heuristic for selection (edge weight?)
+            selected_out_edge = None
+            for out_edge in block.outgoing_edges():
+                if out_edge.target.active_in_set != None:
+                    selected_out_edge = out_edge
+                    break
+            
+            # Select active out set
+            if selected_out_edge == None:
+                # For blocks that have no successors
+                assert block.last_statement.tree.kind == irepr.TreeKind.Ret
+                block.active_out_set = []
+            else:
+                block.active_out_set = selected_out_edge.target.active_in_set
+
+            self.reset_var_vals_and_regs()
+
+            # Activate the values in the active out set
+            for active_out in block.active_out_set:
+                assert isinstance(active_out.val.of, int)
+                
+                active_out.val.last_use = selected_out_edge.target
+                self.activate(active_out.val)
             
             for tree in block.tree_reverse_execution_order():
                 self.current_tree = tree
@@ -137,29 +208,47 @@ class Rlsra:
                 # This is processed with the subtrees (simplifies the algorithm to avoid needless loads and spills)
                 if tree.kind == irepr.TreeKind.LdLocal:
                     pass
-                # Special case : storing into a local variable. This also removes the local variable from the active variables
+                # Special case : storing into a local variable. This also removes the local variable from the active variables if it was active
                 elif tree.kind == irepr.TreeKind.StLocal:
                     val = self.var_vals[tree.operands[0]]
                     subtree = tree.subtrees[0]
 
-                    if val.active_in != None:
-                        # If it's already active, we write the output to the regsiter it's active in
-                        subtree_val = Value(of=subtree, active_in=val.active_in, last_use=tree)
-                        self.registers[subtree_val.active_in].active_val = subtree_val
-                        tree.operands.append(val.active_in)
-                        self.active_vals.append(subtree_val)
-                        self.tree_vals.append(subtree_val)
+                    if subtree.kind == irepr.TreeKind.LdLocal:
+                        # Special case : transfering a local variable to another
+                        val_from = self.var_vals[subtree.operands[0]]
+                        self.use_local(subtree)
 
-                        val.active_in = None
-                        self.active_vals.remove(val)
+                        if val.active_in != None:
+                            # If it's already active, we emit a move
+                            subtree.post_moves.append(RegMove(val_from=val_from, reg_from=val_from.active_in, val_to=val, reg_to=val.active_in))
+                            tree.operands.append(val.active_in)
+
+                            self.registers[val.active_in].active_val = None
+                            val.active_in = None
+                            self.active_vals.remove(val)
+                        else:
+                            # If it's not already active, we emit a spill
+                            subtree.post_spills.append(RegSpill(val=val, reg=val_from.active_in))
+                            tree.operands.append(val)
                     else:
-                        # If not, we first find a register to write it into (reusing the register of the subtree), then add a spill
-                        subtree_val = Value(of=subtree, active_in=None, last_use=tree)
-                        self.activate(subtree_val)
-                        self.tree_vals.append(subtree_val)
+                        if val.active_in != None:
+                            # If it's already active, we write the output to the regsiter it's active in
+                            subtree_val = Value(of=subtree, active_in=val.active_in, last_use=tree)
+                            self.registers[subtree_val.active_in].active_val = subtree_val
+                            tree.operands.append(val.active_in)
+                            self.active_vals.append(subtree_val)
+                            self.tree_vals.append(subtree_val)
 
-                        tree.operands.append(subtree_val.active_in)
-                        tree.post_spills.append(RegSpill(val=subtree_val, reg=subtree_val.active_in))
+                            val.active_in = None
+                            self.active_vals.remove(val)
+                        else:
+                            # If not, we first find a register to write it into (reusing the register of the subtree), then add a spill
+                            subtree_val = Value(of=subtree, active_in=None, last_use=tree)
+                            self.activate(subtree_val)
+                            self.tree_vals.append(subtree_val)
+
+                            tree.operands.append(subtree_val.active_in)
+                            tree.post_spills.append(RegSpill(val=subtree_val, reg=subtree_val.active_in))
                 else:
                     tree_val = self.get_current_tree_val()
                     if tree_val != None:
@@ -184,31 +273,22 @@ class Rlsra:
                     for subtree in tree.subtrees:
                         # Special case : loading a local variable
                         if subtree.kind == irepr.TreeKind.LdLocal:
-                            val = self.var_vals[subtree.operands[0]]
-                            val_was_used = val.last_use != None
-                            val_was_active = val.active_in != None
-                            val.last_use = tree
-
-                            # Activate the variable if it wasn't already
-                            if not val_was_active:
-                                self.activate(val)
-
-                            subtree.reg = val.active_in
-
-                            # If the variable is expected to be found in memory, generate a spill
-                            if val_was_used and not val_was_active:
-                                subtree.post_spills.append(RegSpill(val=val, reg=val.active_in))
-                            
-                            if val.active_in != None:
-                                # Variable was already active, just use its register
-                                subtree.reg = val.active_in
-                            else:
-                                # Variable wasn't already active, activate it then use its register
-                                self.activate(val)
-                                subtree.reg = val.active_in
+                            self.use_local(subtree)
                         else:
                             subtree_val = Value(of=subtree, active_in=None, last_use=tree)
                             self.activate(subtree_val)
                             self.tree_vals.append(subtree_val)
+            
+            # Create an active in set
+            active_in_set = []
+            for val in self.active_vals:
+                active_in_set.append(ActiveInOut(val=val, reg=val.active_in))
+            
+            block.active_in_set = active_in_set
+
+            # Queue up blocks that haven't been processed
+            for predecessor in block.predecessors:
+                if predecessor.source.active_in_set == None:
+                    self.blocks_to_process.append(predecessor.source)
 
         

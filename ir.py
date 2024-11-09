@@ -2,7 +2,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 from typing import *
-from rlsra import RegRestore, RegSpill
+from rlsra import RegRestore, RegSpill, RegMove, ActiveInOut
 
 class Operator(enum.Enum):
     Add = enum.auto()
@@ -86,7 +86,7 @@ class BlockEdge:
     target: BasicBlock
 
     def __str__(self) -> str:
-        return "trgt " + str(self.target)
+        return f"src {self.source} trgt {self.target}"
 
 @dataclasses.dataclass
 class BasicBlock:
@@ -95,6 +95,10 @@ class BasicBlock:
     prev_block: BasicBlock | None
     first_statemenent: Statement | None
     last_statement: Statement | None
+
+    # Assigned during Rlsra.do_linear_scan
+    active_in_set: list[ActiveInOut] | None = None
+    active_out_set: list[ActiveInOut] | None = None
 
     # Assigned during Ir.recompute_predecessors
     predecessors: list[BlockEdge] = dataclasses.field(default_factory=list)
@@ -182,7 +186,7 @@ class BasicBlockList:
         jmp_statement = Statement(il_idx=0, next_statement=None, prev_statement=block.last_statement.prev_statement, tree=Tree(
             kind=TreeKind.Jmp,
             subtrees=[],
-            operands=[BlockEdge(source=block, target=new_block)],
+            operands=[BlockEdge(source=None, target=new_block)],
             parent=None,
             block=block
         ))
@@ -215,6 +219,7 @@ class Ir:
         block = self.blocks.first
         while block != None:
             for edge in block.outgoing_edges():
+                edge.source = block
                 edge.target.predecessors.append(edge)
             block = block.next_block
 
@@ -247,9 +252,25 @@ class Ir:
         block = self.blocks.first
         while block != None:
             print(f"blk 0x{hex(block.il_idx)[2:].zfill(4)} - predecessors: [" + ", ".join(str(pred) for pred in block.predecessors) + "]")
+            if block.active_in_set == None:
+                print("var in: (unknown)")
+            else:
+                print("var in:")
+                for active_in in block.active_in_set:
+                    print(active_in)
+
             statement = block.first_statemenent
             while statement != None:
                 print(f"stmt 0x{hex(statement.il_idx)[2:].zfill(4)}")
                 statement.tree.dump()
+
                 statement = statement.next_statement
+
+            if block.active_out_set == None:
+                print("var out: (unknown)")
+            else:
+                print("var out:")
+                for active_out in block.active_out_set:
+                    print(active_out)
+
             block = block.next_block

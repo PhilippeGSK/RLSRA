@@ -85,7 +85,7 @@ def import_to_ir(fn: StackFunction) -> Ir:
 
             case StackInstructionKind.Jmp:
                 target = blocks.get_or_insert_block_at(ins.operands[0])
-                fold(current_block, TreeKind.Jmp, 0, [BlockEdge(source=current_block, target=target)])
+                fold(current_block, TreeKind.Jmp, 0, [BlockEdge(source=None, target=target)])
                 current_block.append_tree(i_stmt_start, tree_stack.pop())
                 i_stmt_start = i_ins + 1
                 if tree_stack != []: raise Exception("Leftover stack operands")
@@ -95,7 +95,7 @@ def import_to_ir(fn: StackFunction) -> Ir:
             case StackInstructionKind.Branch:
                 if_target = blocks.get_or_insert_block_at(ins.operands[0])
                 else_target = blocks.get_or_insert_block_at(ins.operands[1])
-                fold(current_block, TreeKind.Branch, 1, [BlockEdge(source=current_block, target=if_target), BlockEdge(source=current_block, target=else_target)])
+                fold(current_block, TreeKind.Branch, 1, [BlockEdge(source=None, target=if_target), BlockEdge(source=None, target=else_target)])
                 current_block.append_tree(i_stmt_start, tree_stack.pop())
                 i_stmt_start = i_ins + 1
                 if tree_stack != []: raise Exception("Leftover stack operands")

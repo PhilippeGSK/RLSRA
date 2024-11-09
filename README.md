@@ -14,6 +14,6 @@ Resources :
 - [https://brrt-to-the-future.blogspot.com/2019/03/reverse-linear-scan-allocation-is.html](https://brrt-to-the-future.blogspot.com/2019/03/reverse-linear-scan-allocation-is.html)
 
 Areas to improve :
-- The project is not finished and block boundaries are not supported yet (only returning blocks are processed for now)
+- Take into account block edge weights to potentially avoid needless spills and restores
 
 Thanks to u/raiph on Reddit for suggesting I try RLSRA.

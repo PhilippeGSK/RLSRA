@@ -4,7 +4,6 @@ from ir import *
 
 n = 10
 
-"""
 ins: list[StackInstruction] = [
     StackInstruction(StackInstructionKind.Push, [0]),
     StackInstruction(StackInstructionKind.StLocal, [0]),
@@ -39,8 +38,8 @@ ins: list[StackInstruction] = [
     StackInstruction(StackInstructionKind.LdLocal, [0]),
     StackInstruction(StackInstructionKind.Ret, []),
 ]
-"""
 
+"""
 ins: list[StackInstruction] = [
     StackInstruction(StackInstructionKind.Push, [0]),
     StackInstruction(StackInstructionKind.StLocal, [0]),
@@ -57,6 +56,7 @@ ins: list[StackInstruction] = [
 
     StackInstruction(StackInstructionKind.Ret, [])
 ]
+"""
 
 """
 ins: list[StackInstruction] = [
