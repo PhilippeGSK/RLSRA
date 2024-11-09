@@ -134,48 +134,9 @@ class Rlsra:
             for tree in block.tree_reverse_execution_order():
                 self.current_tree = tree
 
-                # Special case : loading a local variable
-                # TODO : PROCESS THIS WITH THE SUBTREES TO NOT END UP WITH NEEDLESS SPILLS AND RESTORES
+                # This is processed with the subtrees (simplifies the algorithm to avoid needless loads and spills)
                 if tree.kind == irepr.TreeKind.LdLocal:
-                    tree_val = self.get_current_tree_val()
-                    assert tree_val != None # We cannot have LdLocal without using its result
-
-                    val = self.var_vals[tree.operands[0]]
-
-                    if val.active_in == None:
-                        # If the local variable val is not already active, we activate it using the tree val (where it's expected to go)
-                        if tree_val.active_in == None:
-                            self.activate(tree_val)
-
-                        val.active_in = tree_val.active_in
-                        tree.reg = val.active_in
-                        # Generate a spill if we need to because this variable is expected to be found in memory
-                        if (val.last_use != None):
-                            tree.post_spills.append(RegSpill(val=val, reg=val.active_in))
-                        self.registers[val.active_in].active_val = val
-                        self.active_vals.append(val)
-
-                        tree_val.active_in = None
-                        self.active_vals.remove(tree_val)
-                        self.tree_vals.remove(tree_val)
-                    else:
-                        # The local variable val is already active
-                        if tree_val.active_in == None:
-                            # If the tree val isn't, we just generate a spill for the local variable into the tree val
-                            tree.post_spills.append(RegSpill(val=tree_val, reg=val.active_in))
-                            tree.reg = val.active_in
-                        else:
-                            # If the tree val is, we just generate a move for the local variable into the tree val register
-                            tree.reg = val.active_in
-                            tree.post_moves.append(RegMove(
-                                val_from=val,
-                                reg_from=val.active_in,
-                                val_to=tree_val,
-                                reg_to=tree_val.active_in
-                            ))
-                    
-                    val.last_use = self.current_tree
-
+                    pass
                 # Special case : storing into a local variable. This also removes the local variable from the active variables
                 elif tree.kind == irepr.TreeKind.StLocal:
                     val = self.var_vals[tree.operands[0]]
@@ -221,8 +182,33 @@ class Rlsra:
 
                     # Generate a use for all the subtrees and activate them because by this point we must have all operands in registers
                     for subtree in tree.subtrees:
-                        subtree_val = Value(of=subtree, active_in=None, last_use=tree)
-                        self.activate(subtree_val)
-                        self.tree_vals.append(subtree_val)
+                        # Special case : loading a local variable
+                        if subtree.kind == irepr.TreeKind.LdLocal:
+                            val = self.var_vals[subtree.operands[0]]
+                            val_was_used = val.last_use != None
+                            val_was_active = val.active_in != None
+                            val.last_use = tree
+
+                            # Activate the variable if it wasn't already
+                            if not val_was_active:
+                                self.activate(val)
+
+                            subtree.reg = val.active_in
+
+                            # If the variable is expected to be found in memory, generate a spill
+                            if val_was_used and not val_was_active:
+                                subtree.post_spills.append(RegSpill(val=val, reg=val.active_in))
+                            
+                            if val.active_in != None:
+                                # Variable was already active, just use its register
+                                subtree.reg = val.active_in
+                            else:
+                                # Variable wasn't already active, activate it then use its register
+                                self.activate(val)
+                                subtree.reg = val.active_in
+                        else:
+                            subtree_val = Value(of=subtree, active_in=None, last_use=tree)
+                            self.activate(subtree_val)
+                            self.tree_vals.append(subtree_val)
 
         
