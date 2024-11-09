@@ -217,6 +217,7 @@ class Rlsra:
                 # Special case : storing into a local variable. This also removes the local variable from the active variables if it was active
                 elif tree.kind == irepr.TreeKind.StLocal:
                     val = self.var_vals[tree.operands[0]]
+                    val_was_used = val.last_use != None
                     subtree = tree.subtrees[0]
 
                     if subtree.kind == irepr.TreeKind.LdLocal:
@@ -234,8 +235,9 @@ class Rlsra:
                             val.last_use = None
                             self.active_vals.remove(val)
                         else:
-                            # If it's not already active, we emit a spill
-                            subtree.post_spills.append(RegSpill(val=val, reg=val_from.active_in))
+                            # If it's not already active but will be used later, we emit a spill
+                            if val_was_used:
+                                subtree.post_spills.append(RegSpill(val=val, reg=val_from.active_in))
                             tree.operands.append(val)
                     else:
                         if val.active_in != None:
