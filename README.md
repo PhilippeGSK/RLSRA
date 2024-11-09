@@ -5,6 +5,7 @@ This is a continuation of my previous project here [https://github.com/PhilippeG
 - Most of the interesting parts are in rlsra.py
 - ir.py contains code related to the tree-based intermediate representation (extremely simplified equivalent of the GenTree system in ryujit)
 - stack_instruction.py contains code related to a small stack-based instruction set, as well as helper methods to convert it to ir
+- interpreter.py contains a simple interpreter to test the register allocator : it will evaluate the code using the register information / spills / restores / moves provided in the trees.
 - main.py contains a demo
 
 Resources :
