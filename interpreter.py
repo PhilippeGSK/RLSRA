@@ -15,8 +15,6 @@ class Interpreter:
         self.current_block = ir.blocks.first
     
     def jump(self, edge: BlockEdge) -> None:
-        print(f"Jumping to IL_{hex(edge.target.il_idx)[2:].zfill(4)}")
-
         self.current_block = edge.target
 
         active_out_set = edge.source.active_out_set
@@ -41,7 +39,6 @@ class Interpreter:
 
     def run(self) -> int:
         while True:
-            print(f"Executing block IL_{hex(self.current_block.il_idx)[2:].zfill(4)}")
             for tree in self.current_block.tree_execution_order():
                 match tree.kind:
                     case TreeKind.LdLocal:
