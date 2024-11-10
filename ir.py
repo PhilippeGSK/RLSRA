@@ -2,7 +2,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 from typing import *
-from rlsra import RegRestore, RegSpill, RegMove, ActiveInOut
+from rlsra import RegRestore, RegSpill, RegMove, ActiveInOut, Value
 
 class Operator(enum.Enum):
     Add = enum.auto()
@@ -99,6 +99,7 @@ class BasicBlock:
     # Assigned during Rlsra.do_linear_scan
     active_in_set: list[ActiveInOut] | None = None
     active_out_set: list[ActiveInOut] | None = None
+    alive_in_set: list[Value] | None = None
 
     # Assigned during Ir.recompute_predecessors
     predecessors: list[BlockEdge] = dataclasses.field(default_factory=list)

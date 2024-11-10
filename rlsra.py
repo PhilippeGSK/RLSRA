@@ -196,11 +196,19 @@ class Rlsra:
 
             self.reset_var_vals_and_regs()
 
+            # Mark the values that can be potentially used later as alive
+            for out_edge in block.outgoing_edges():
+                if out_edge.target.alive_in_set == None:
+                    # For all we know, this block might use all local variables
+                    for var_val in self.var_vals:
+                        var_val.last_use = out_edge.target
+                    break
+                else:
+                    for alive in out_edge.target.alive_in_set:
+                        alive.last_use = out_edge.target
+
             # Activate the values in the active out set
             if selected_out_edge != None:
-                for var_val in self.var_vals:
-                    var_val.last_use = selected_out_edge.target
-
                 for active_out in block.active_out_set:
                     assert isinstance(active_out.val.of, int)
                     
@@ -296,6 +304,14 @@ class Rlsra:
                 active_in_set.append(ActiveInOut(val=val, reg=val.active_in))
             
             block.active_in_set = active_in_set
+
+            # Create an alive in set
+            alive_in_set = []
+            for val in self.var_vals:
+                if val.last_use != None:
+                    alive_in_set.append(val)
+            
+            block.alive_in_set = alive_in_set
 
             # Queue up blocks that haven't been processed
             for predecessor in block.predecessors:
