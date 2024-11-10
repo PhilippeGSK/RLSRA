@@ -114,5 +114,6 @@ def import_to_ir(fn: StackFunction) -> Ir:
 
     result = Ir(blocks=blocks, local_vars=fn.local_vars)
     result.recompute_predecessors()
+    result.recompute_alive_in_sets()
     result.reindex()
     return result

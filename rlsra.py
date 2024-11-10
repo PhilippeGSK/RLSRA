@@ -165,7 +165,7 @@ class Rlsra:
             subtree.post_spills.append(RegSpill(val=val, reg=val.active_in))
     
     # Do RLSRA
-    # Preconditions : recompute_predecessors, reindex all executed
+    # Preconditions : recompute_predecessors, recompute_alive_in_sets, reindex all executed
     def do_reverse_linear_scan(self, ir: Ir) -> None:
         # Set up all the values corresponding to local variables
         for i in range(ir.local_vars):
@@ -196,16 +196,10 @@ class Rlsra:
 
             self.reset_var_vals_and_regs()
 
-            # Mark the values that can be potentially used later as alive
+            # Mark the values that will be used in successor blocks as alive
             for out_edge in block.outgoing_edges():
-                if out_edge.target.alive_in_set == None:
-                    # For all we know, this block might use all local variables
-                    for var_val in self.var_vals:
-                        var_val.last_use = out_edge.target
-                    break
-                else:
-                    for alive in out_edge.target.alive_in_set:
-                        alive.last_use = out_edge.target
+                for alive in out_edge.target.alive_in_set:
+                    self.var_vals[alive].last_use = out_edge.target
 
             # Activate the values in the active out set
             if selected_out_edge != None:
@@ -304,14 +298,6 @@ class Rlsra:
                 active_in_set.append(ActiveInOut(val=val, reg=val.active_in))
             
             block.active_in_set = active_in_set
-
-            # Create an alive in set
-            alive_in_set = []
-            for val in self.var_vals:
-                if val.last_use != None:
-                    alive_in_set.append(val)
-            
-            block.alive_in_set = alive_in_set
 
             # Queue up blocks that haven't been processed
             for predecessor in block.predecessors:

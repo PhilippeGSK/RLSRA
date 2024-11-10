@@ -99,10 +99,12 @@ class BasicBlock:
     # Assigned during Rlsra.do_linear_scan
     active_in_set: list[ActiveInOut] | None = None
     active_out_set: list[ActiveInOut] | None = None
-    alive_in_set: list[Value] | None = None
 
     # Assigned during Ir.recompute_predecessors
     predecessors: list[BlockEdge] = dataclasses.field(default_factory=list)
+
+    # Assigned during Ir.recompute_alive_in_sets
+    alive_in_set: set[int] | None = None
 
     def outgoing_edges(self) -> Iterable[BlockEdge]:
         # The assumption is that the operands of terminator nodes are block edges
@@ -223,6 +225,33 @@ class Ir:
                 edge.source = block
                 edge.target.predecessors.append(edge)
             block = block.next_block
+    
+    def recompute_alive_in_sets(self) -> None:
+        # TODO : optimize this because it can be computed in a single O(n) pass if we start from "end" blocks (no successors / in infinite loops)
+        while True:
+            change_occured = False
+            for block in self.block_execution_order():
+                prev_alive = block.alive_in_set
+
+                alive = set()
+                for edge in block.outgoing_edges():
+                    if edge.target.alive_in_set != None:
+                        alive |= edge.target.alive_in_set
+
+                for tree in block.tree_reverse_execution_order():
+                    if tree.kind == TreeKind.LdLocal:
+                        alive.add(tree.operands[0])
+                    elif tree.kind == TreeKind.StLocal:
+                        if tree.operands[0] in alive:
+                            alive.remove(tree.operands[0])
+            
+                block.alive_in_set = alive
+
+                if alive != prev_alive:
+                    change_occured = True
+            
+            if not change_occured:
+                break
 
     def reindex(self) -> None:
         index = 0
