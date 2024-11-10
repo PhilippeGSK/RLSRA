@@ -109,6 +109,8 @@ class Rlsra:
 
             if best_val == None:
                 best_val = active_val
+                if isinstance(best_val.last_use, irepr.BasicBlock):
+                    break
             elif isinstance(active_val.last_use, irepr.BasicBlock):
                 best_val = active_val
                 break

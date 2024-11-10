@@ -83,7 +83,7 @@ fn = StackFunction(local_vars=5, instructions=ins)
 
 ir = import_to_ir(fn)
 
-num_regs = 2
+num_regs = 3
 
 try:
     Rlsra(num_regs=num_regs).do_reverse_linear_scan(ir)
