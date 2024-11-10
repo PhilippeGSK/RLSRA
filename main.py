@@ -94,4 +94,9 @@ except Exception as e:
 print("IR dump =======")
 ir.dump()
 
-print("Result:", Interpreter(num_regs=num_regs, ir=ir).run())
+i = Interpreter(num_regs=num_regs, ir=ir)
+
+print("Result:", i.run())
+print("Spill count:", i.spill_count)
+print("Restore count:", i.restore_count)
+print("Move count:", i.move_count)
