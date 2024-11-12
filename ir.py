@@ -202,7 +202,7 @@ class BasicBlockList:
         new_block.first_statemenent = statement
         new_block.last_statement = block.last_statement
 
-        jmp_statement = Statement(il_idx=0, next_statement=None, prev_statement=block.last_statement.prev_statement, tree=Tree(
+        jmp_statement = Statement(il_idx=0, next_statement=None, prev_statement=statement.prev_statement, tree=Tree(
             kind=TreeKind.Jmp,
             subtrees=[],
             operands=[BlockEdge(source=None, target=new_block)],
