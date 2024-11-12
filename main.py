@@ -1,5 +1,6 @@
 from stack_instruction import *
 from rlsra import *
+from lsra import *
 from ir import *
 from interpreter import Interpreter
 
@@ -83,10 +84,10 @@ fn = StackFunction(local_vars=5, instructions=ins)
 
 ir = import_to_ir(fn)
 
-num_regs = 3
+num_regs = 2
 
 try:
-    Rlsra(num_regs=num_regs).do_reverse_linear_scan(ir)
+    Lsra(num_regs=num_regs).do_linear_scan(ir)
 except Exception as e:
     ir.dump()
     raise e

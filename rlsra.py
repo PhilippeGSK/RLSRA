@@ -51,7 +51,7 @@ class RegMove:
     reg_to: int
 
     def __str__(self) -> str:
-        return f"spill {self.val} from r{self.reg}"
+        return f"move from r{self.reg_from} to r{self.reg_to}"
 
 # Inserted into the active in / active out sets of blocks
 @dataclasses.dataclass
@@ -72,7 +72,7 @@ class Rlsra:
 
     current_tree: Tree
 
-    def __init__(self, num_regs: int = 4) -> None:
+    def __init__(self, num_regs) -> None:
         self.registers = [Register(active_val=None) for _ in range(num_regs)]
         self.var_vals = []
         self.tree_vals = []
@@ -90,7 +90,11 @@ class Rlsra:
     # Activates a value by giving it a register. Can spill other values
     def activate(self, val: Value) -> None:
         # Try to find a free register activate the value with
-        for reg_i, reg in enumerate(self.registers):
+        regs = enumerate(self.registers)
+        if isinstance(val.of, int):
+            # Attempt to assign variables and tree temps different values in general
+            regs = enumerate(reversed(self.registers))
+        for reg_i, reg in regs:
             if reg.active_val == None:
                 val.active_in = reg_i
                 reg.active_val = val
@@ -144,7 +148,7 @@ class Rlsra:
             val.last_use = None
         
         assert self.active_vals == []
-        assert not any(reg.active_val != None for reg in self.registers)
+        assert not any(reg.active_val != None for reg in self.registers), str(self.registers)
     
     # Setup a local variable and use its register as the output of the LdLocal subtree
     def use_local(self, subtree: Tree):

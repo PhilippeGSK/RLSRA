@@ -50,6 +50,29 @@ class Interpreter:
     def run(self) -> int:
         while True:
             for tree in self.current_block.tree_execution_order():
+                # Pre spills, restores, moves
+                new_registers = self.registers[:]
+
+                for spill in tree.pre_spills:
+                    if isinstance(spill.val.of, int):
+                        self.spilled_local_vals[spill.val.of] = self.registers[spill.reg]
+                    else:
+                        self.spilled_tree_vals[spill.val.of.ir_idx] = self.registers[spill.reg]
+                    self.spill_count += 1
+                
+                for restore in tree.pre_restores:
+                    if isinstance(restore.val.of, int):
+                        new_registers[restore.reg] = self.spilled_local_vals[restore.val.of]
+                    else:
+                        new_registers[restore.reg] = self.spilled_tree_vals[restore.val.of.ir_idx]
+                    self.restore_count += 1
+                
+                for move in tree.pre_moves:
+                    new_registers[move.reg_to] = self.registers[move.reg_from]
+                    self.move_count += 1
+                
+                self.registers = new_registers
+
                 match tree.kind:
                     case TreeKind.LdLocal:
                         # Handled by the reg allocator
@@ -88,7 +111,8 @@ class Interpreter:
                             self.jump(tree.operands[1])
                     case TreeKind.Jmp:
                         self.jump(tree.operands[0])
-                
+
+                # Post spills, restores, moves
                 new_registers = self.registers[:]
 
                 for spill in tree.post_spills:

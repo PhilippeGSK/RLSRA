@@ -34,8 +34,11 @@ class Tree:
 
     # Assigned during Ir.reindex
     ir_idx: int = 0
-    # Assigned during Rlsra.do_linear_scan
+    # Assigned during Rlsra.do_reverse_linear_scan or Lsra.do_linear_scan
     reg: int = -1
+    pre_spills: list[RegSpill] = dataclasses.field(default_factory=list)
+    pre_restores: list[RegRestore] = dataclasses.field(default_factory=list)
+    pre_moves: list[RegMove] = dataclasses.field(default_factory=list)
     post_spills: list[RegSpill] = dataclasses.field(default_factory=list)
     post_restores: list[RegRestore] = dataclasses.field(default_factory=list)
     post_moves: list[RegMove] = dataclasses.field(default_factory=list)
@@ -57,6 +60,15 @@ class Tree:
             tree.dump(indent_level + 4)
 
         indent = " " * indent_level
+        
+        for pre_spill in self.pre_spills:
+            print(indent + str(pre_spill))
+
+        for pre_restore in self.pre_restores:
+            print(indent + str(pre_restore))
+
+        for pre_move in self.pre_moves:
+            print(indent + str(pre_move))
 
         reg = "" if self.parent == None else "(r" + str(self.reg) + ") "
         print(
@@ -72,6 +84,9 @@ class Tree:
 
         for post_restore in self.post_restores:
             print(indent + str(post_restore))
+
+        for post_move in self.post_moves:
+            print(indent + str(post_move))
 
 @dataclasses.dataclass
 class Statement:
@@ -103,8 +118,9 @@ class BasicBlock:
     # Assigned during Ir.recompute_predecessors
     predecessors: list[BlockEdge] = dataclasses.field(default_factory=list)
 
-    # Assigned during Ir.recompute_alive_in_sets
+    # Assigned during Ir.recompute_alive_sets
     alive_in_set: set[int] | None = None
+    alive_out_set: set[int] | None = None
 
     def outgoing_edges(self) -> Iterable[BlockEdge]:
         # The assumption is that the operands of terminator nodes are block edges
@@ -226,7 +242,7 @@ class Ir:
                 edge.target.predecessors.append(edge)
             block = block.next_block
     
-    def recompute_alive_in_sets(self) -> None:
+    def recompute_alive_sets(self) -> None:
         # TODO : optimize this because it can be computed in a single O(n) pass if we start from "end" blocks (no successors / in infinite loops)
         while True:
             change_occured = False
@@ -252,6 +268,13 @@ class Ir:
             
             if not change_occured:
                 break
+        
+        for block in self.block_execution_order():
+            alive_out_set = set()
+            for out_edge in block.outgoing_edges():
+                alive_out_set |= out_edge.target.alive_in_set
+            
+            block.alive_out_set = alive_out_set
 
     def reindex(self) -> None:
         index = 0
@@ -282,10 +305,10 @@ class Ir:
         block = self.blocks.first
         while block != None:
             print(f"\nblk 0x{hex(block.il_idx)[2:].zfill(4)} - predecessors: [" + ", ".join(str(pred) for pred in block.predecessors) + "]")
-            if block.active_in_set == None:
-                print("var in: (unknown)")
-            else:
-                print("var in:")
+            if block.alive_in_set == None:
+                print("alive var in:", block.alive_in_set)
+            if block.active_in_set != None:
+                print("active var in:")
                 for active_in in block.active_in_set:
                     print(active_in)
 
@@ -296,10 +319,10 @@ class Ir:
 
                 statement = statement.next_statement
 
-            if block.active_out_set == None:
-                print("var out: (unknown)")
-            else:
-                print("var out:")
+            if block.alive_out_set != None:
+                print("alive var out:", block.alive_out_set)
+            if block.active_out_set != None:
+                print("active var out:")
                 for active_out in block.active_out_set:
                     print(active_out)
 
