@@ -16,6 +16,7 @@ Resources :
 - [https://brrt-to-the-future.blogspot.com/2019/03/reverse-linear-scan-allocation-is.html](https://brrt-to-the-future.blogspot.com/2019/03/reverse-linear-scan-allocation-is.html)
 
 Areas to improve :
+- Add register preference sets
 - Take into account block edge weights to potentially avoid needless spills and restores
 - Compute live in sets faster (algorithm as of right now is not really optimized)
 - The algorithm can't find cycles in blocks. Infinite loops will never be considered by the algorithm as for right now. This could be fixed by adding one of the elements of every cycle to the queue of blocks to be processed at the beginning
