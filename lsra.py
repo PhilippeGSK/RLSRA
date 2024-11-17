@@ -194,9 +194,6 @@ class Lsra:
             for tree in block.tree_execution_order():
                 self.current_tree = tree
 
-                if tree.ir_idx == 17:
-                    print([str(val) for val in self.active_vals])
-
                 # Make sure all the operands are in a register
                 for subtree in tree.subtrees:
                     tree_val = self.get_tree_val(subtree)
